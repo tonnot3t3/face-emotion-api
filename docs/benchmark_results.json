@@ -2,31 +2,31 @@
   {
     "name": "PyTorch FP32",
     "size_mb": 327.34,
-    "mean_ms": 52.48,
-    "median_ms": 52.53,
-    "p95_ms": 55.25,
-    "min_ms": 48.61,
-    "max_ms": 55.66,
+    "mean_ms": 131.34,
+    "median_ms": 132.72,
+    "p95_ms": 144.6,
+    "min_ms": 95.93,
+    "max_ms": 168.73,
     "runs": 50
   },
   {
     "name": "ONNX FP32",
     "size_mb": 327.56,
-    "mean_ms": 627.57,
-    "median_ms": 684.75,
-    "p95_ms": 698.35,
-    "min_ms": 230.99,
-    "max_ms": 701.22,
+    "mean_ms": 314.17,
+    "median_ms": 314.44,
+    "p95_ms": 317.3,
+    "min_ms": 310.14,
+    "max_ms": 319.91,
     "runs": 50
   },
   {
     "name": "ONNX INT8 (Quantized)",
     "size_mb": 84.73,
-    "mean_ms": 84.41,
-    "median_ms": 83.9,
-    "p95_ms": 86.3,
-    "min_ms": 82.33,
-    "max_ms": 104.15,
+    "mean_ms": 265.07,
+    "median_ms": 264.88,
+    "p95_ms": 269.48,
+    "min_ms": 260.56,
+    "max_ms": 271.18,
     "runs": 50
   }
 ]
