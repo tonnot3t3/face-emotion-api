@@ -1,0 +1,10 @@
+# ===== API runtime (production image จะใช้แค่อันนี้) =====
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.4
+
+# ===== Inference runtime =====
+onnxruntime==1.20.1
+numpy==2.0.2
+Pillow==11.0.0

@@ -1,0 +1,163 @@
+{
+  "info": {
+    "name": "Face Emotion Classifier API",
+    "description": "Collection สำหรับทดสอบ Face Emotion Classification API ทั้ง happy path และ error cases\n\n## Variables\n- `base_url`: เปลี่ยนเป็น URL ของ API ที่ deploy แล้ว เช่น `https://YOURNAME-face-emotion.hf.space`\n- `image_path`: path ของไฟล์รูปทดสอบ (ใช้กับ Postman desktop เท่านั้น)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:7860",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "ตรวจสอบสถานะ API และว่าโมเดลถูกโหลดหรือยัง"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response has status=ok', () => {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('ok');",
+              "    pm.expect(json.model_loaded).to.be.true;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/model-info",
+          "host": ["{{base_url}}"],
+          "path": ["model-info"]
+        },
+        "description": "ดูข้อมูลโมเดลปัจจุบัน (id, ขนาดไฟล์, labels)"
+      }
+    },
+    {
+      "name": "Predict - Success (upload image)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "เลือกรูปภาพใบหน้า .jpg/.png/.webp ที่จะทำนาย"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/predict",
+          "host": ["{{base_url}}"],
+          "path": ["predict"]
+        },
+        "description": "Happy path — ส่งรูปภาพถูกต้อง คาดหวัง HTTP 200 และ JSON ที่มี predicted_label"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has predicted_label', () => {",
+              "    const json = pm.response.json();",
+              "    const labels = ['angry','disgust','fear','happy','neutral','sad','surprise'];",
+              "    pm.expect(labels).to.include(json.predicted_label);",
+              "    pm.expect(json.confidence).to.be.within(0, 1);",
+              "    pm.expect(json.scores).to.have.lengthOf(7);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Predict - Error: Text file (415)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "อัปโหลดไฟล์ .txt เพื่อทดสอบ error 415"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/predict",
+          "host": ["{{base_url}}"],
+          "path": ["predict"]
+        },
+        "description": "Error case — ไฟล์ที่ไม่ใช่รูปต้องตอบ 415 Unsupported Media Type"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 415', () => pm.response.to.have.status(415));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Predict - Error: Missing file (400)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "{{base_url}}/predict",
+          "host": ["{{base_url}}"],
+          "path": ["predict"]
+        },
+        "description": "Error case — ไม่ส่ง field file มาเลย ต้องตอบ 400"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}
