@@ -1,47 +1,28 @@
-"""
-Dynamic Quantization: vit_face_expression.onnx -> vit_face_expression_quantized.onnx
+import os
+from onnxruntime.quantization import quantize_dynamic, QuantType
 
-ใช้ onnxruntime.quantization.quantize_dynamic เพื่อแปลง weight INT8
-- ไม่ต้องใช้ calibration dataset (ต่างจาก static)
-- ลดขนาดโมเดล ~4x และเร็วขึ้นบน CPU
-- accuracy drop เล็กน้อย (โดยปกติ < 1%) บน task แบบนี้
+def main():
+    print("[1/2] เริ่มต้นการบีบอัดโมเดล (Quantize INT8)...")
+    
+    model_input = os.path.join("models", "vit_face_expression.onnx")
+    # สมมติฐานชื่อไฟล์ Output ตามมาตรฐาน ถ้าโค้ดคุณใช้ชื่ออื่น สามารถแก้ตรงนี้ได้เลยครับ
+    model_output = os.path.join("models", "vit_face_expression_quantized.onnx")
+    
+    if not os.path.exists(model_input):
+        print(f"❌ Error: ไม่พบไฟล์ {model_input}")
+        return
 
-Usage:
-    python -m scripts.quantize
-"""
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-from onnxruntime.quantization import QuantType, quantize_dynamic
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.config import ONNX_FP32_PATH, ONNX_QUANTIZED_PATH  # noqa: E402
-
-
-def main() -> None:
-    if not ONNX_FP32_PATH.exists():
-        raise FileNotFoundError(
-            f"ไม่พบ {ONNX_FP32_PATH}. กรุณารัน scripts/convert_to_onnx.py ก่อน"
-        )
-
-    print(f"[1/2] กำลัง quantize dynamic (INT8 weights) ...")
+    print("[2/2] กำลังบีบอัดเฉพาะส่วน Transformer (ข้าม Conv เพื่อหลบ Error)...")
+    
+    # หัวใจสำคัญคือ op_types_to_quantize=['MatMul']
     quantize_dynamic(
-        model_input=str(ONNX_FP32_PATH),
-        model_output=str(ONNX_QUANTIZED_PATH),
-        weight_type=QuantType.QInt8,
+        model_input=model_input,
+        model_output=model_output,
+        op_types_to_quantize=['MatMul'], 
+        weight_type=QuantType.QUInt8
     )
-
-    fp32_mb = ONNX_FP32_PATH.stat().st_size / (1024 * 1024)
-    int8_mb = ONNX_QUANTIZED_PATH.stat().st_size / (1024 * 1024)
-    reduction = (1 - int8_mb / fp32_mb) * 100
-
-    print(f"[2/2] เสร็จแล้ว -> {ONNX_QUANTIZED_PATH}")
-    print(f"    FP32 size: {fp32_mb:.2f} MB")
-    print(f"    INT8 size: {int8_mb:.2f} MB")
-    print(f"    ลดลง:      {reduction:.1f}%")
-
+    
+    print(f"✅ เสร็จสมบูรณ์! ได้ไฟล์บีบอัดที่: {model_output}")
 
 if __name__ == "__main__":
     main()

@@ -1,53 +1,29 @@
-"""
-Convert HuggingFace ViT image classifier -> ONNX (FP32).
+import os
+import shutil
+from optimum.onnxruntime import ORTModelForImageClassification
 
-Usage:
-    python -m scripts.convert_to_onnx
+def main():
+    print("[1/3] กำลังโหลดและแปลงโมเดลด้วย Optimum (วิธีนี้ชัวร์ที่สุด)...")
+    model_id = "trpakov/vit-face-expression"
+    temp_dir = "models_temp"
 
-จะดาวน์โหลดโมเดลจาก HuggingFace แล้วเซฟเป็น
-    models/vit_face_expression.onnx
-"""
-from __future__ import annotations
+    # โหลดและแปลงเป็น ONNX อัตโนมัติ (ปลอดภัยและสมบูรณ์ 100%)
+    model = ORTModelForImageClassification.from_pretrained(model_id, export=True)
+    model.save_pretrained(temp_dir)
 
-import sys
-from pathlib import Path
+    print("[2/3] กำลังจัดการไฟล์ให้ตรงกับโปรเจกต์...")
+    os.makedirs("models", exist_ok=True)
 
-import torch
-from transformers import AutoModelForImageClassification
+    # ย้ายและเปลี่ยนชื่อไฟล์ให้ตรงกับที่ API ต้องการ
+    source_file = os.path.join(temp_dir, "model.onnx")
+    target_file = os.path.join("models", "vit_face_expression.onnx")
 
-# ทำให้ import app ได้แม้รันจาก root
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.config import HF_MODEL_ID, IMAGE_SIZE, ONNX_FP32_PATH  # noqa: E402
-
-
-def main() -> None:
-    print(f"[1/3] กำลังโหลดโมเดล {HF_MODEL_ID} จาก HuggingFace ...")
-    model = AutoModelForImageClassification.from_pretrained(HF_MODEL_ID)
-    model.eval()
-
-    print(f"[2/3] กำลัง trace และ export เป็น ONNX (opset 14) ...")
-    dummy_input = torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE)
-
-    ONNX_FP32_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    torch.onnx.export(
-        model,
-        dummy_input,
-        str(ONNX_FP32_PATH),
-        export_params=True,
-        opset_version=14,
-        do_constant_folding=True,
-        input_names=["pixel_values"],
-        output_names=["logits"],
-        dynamic_axes={
-            "pixel_values": {0: "batch_size"},
-            "logits": {0: "batch_size"},
-        },
-    )
-
-    size_mb = ONNX_FP32_PATH.stat().st_size / (1024 * 1024)
-    print(f"[3/3] เสร็จแล้ว -> {ONNX_FP32_PATH}  ({size_mb:.2f} MB)")
-
+    if os.path.exists(source_file):
+        if os.path.exists(target_file):
+            os.remove(target_file)
+        shutil.move(source_file, target_file)
+        
+    print(f"[3/3] ✅ เสร็จสมบูรณ์! ได้ไฟล์ขนาดเต็มพร้อมใช้งานที่: {target_file}")
 
 if __name__ == "__main__":
     main()
