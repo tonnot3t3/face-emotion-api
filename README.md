@@ -35,7 +35,7 @@
 - **Web UI**: หน้าเว็บสวยๆ ให้ผู้ใช้อัปโหลดภาพและดูผล
 
 ### 7 Emotion Classes ที่โมเดลทำนายได้
-| 😠 angry | 🤢 disgust | 😨 fear | 😊 happy | 😐 neutral | 😢 sad | 😲 surprise |
+| 😠 angry |  💛 love | 😨 fear | 😊 happy | 😐 neutral | 😢 sad | 😲 surprise |
 |---------|-----------|---------|---------|-----------|--------|-------------|
 
 ---
