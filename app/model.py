@@ -3,12 +3,13 @@ Model inference module.
 
 ฟังก์ชันที่ใช้ใน worker process ของ ProcessPoolExecutor
 - โหลด ONNX session แบบ lazy (เพราะ process ใหม่ไม่มี state จาก parent)
+- ตรวจจับใบหน้า (Haar cascade) ก่อน inference
 - preprocess รูปภาพ
 - รัน inference
 - postprocess softmax + argmax
 
 หมายเหตุ: ต้องไม่ import torch หรือ transformers ในไฟล์นี้
-เพื่อให้ image ของ container เล็กที่สุด — ใช้แค่ onnxruntime + numpy + Pillow
+เพื่อให้ image ของ container เล็กที่สุด — ใช้แค่ onnxruntime + numpy + Pillow + opencv
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Tuple
 
+import cv2
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
@@ -32,6 +34,9 @@ from app.config import (
 # Global session ต่อ process (ProcessPoolExecutor reuse worker จึงโหลดครั้งเดียวต่อ worker)
 _session: ort.InferenceSession | None = None
 _input_name: str | None = None
+
+# Global face cascade ต่อ process (lazy load)
+_face_cascade: cv2.CascadeClassifier | None = None
 
 
 def _get_session(model_path: str | Path | None = None) -> ort.InferenceSession:
@@ -58,6 +63,54 @@ def _get_session(model_path: str | Path | None = None) -> ort.InferenceSession:
         )
         _input_name = _session.get_inputs()[0].name
     return _session
+
+
+def _get_face_cascade() -> cv2.CascadeClassifier:
+    """โหลด Haar cascade สำหรับ face detection แบบ singleton ต่อ process"""
+    global _face_cascade
+    if _face_cascade is None:
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        cascade = cv2.CascadeClassifier(cascade_path)
+        if cascade.empty():
+            raise RuntimeError(
+                f"ไม่สามารถโหลด Haar cascade ที่ {cascade_path}"
+            )
+        _face_cascade = cascade
+    return _face_cascade
+
+
+def _detect_face(image_bytes: bytes) -> bool:
+    """
+    ตรวจสอบว่าในภาพมีใบหน้าอย่างน้อย 1 ใบหรือไม่
+    ใช้ Haar cascade frontal face detector ของ OpenCV (เร็ว, ไม่ต้อง dl model เพิ่ม)
+
+    คืนค่า True ถ้าพบใบหน้าอย่างน้อย 1 ใบ, False ถ้าไม่พบ
+    """
+    img = Image.open(BytesIO(image_bytes))
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+
+    # ลด resolution ลงถ้าใหญ่เกินเพื่อความเร็ว (จำกัด long edge ที่ 800px)
+    max_side = 800
+    w, h = img.size
+    if max(w, h) > max_side:
+        scale = max_side / float(max(w, h))
+        img = img.resize((int(w * scale), int(h * scale)), Image.BILINEAR)
+
+    arr = np.asarray(img)
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    # equalize histogram ช่วยให้ตรวจจับในภาพที่แสงไม่สม่ำเสมอได้ดีขึ้น
+    gray = cv2.equalizeHist(gray)
+
+    cascade = _get_face_cascade()
+    faces = cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(30, 30),
+        flags=cv2.CASCADE_SCALE_IMAGE,
+    )
+    return len(faces) > 0
 
 
 def _preprocess(image_bytes: bytes) -> np.ndarray:
@@ -93,14 +146,31 @@ def predict_from_bytes(image_bytes: bytes) -> dict:
     """
     Public API ที่ถูกเรียกใน worker process
     คืนค่า dict ที่ประกอบไปด้วย:
-      - predicted_label
-      - confidence
-      - scores: list ของ {label, score}
+      - face_detected: bool — พบใบหน้าหรือไม่
+      - predicted_label: emotion ที่มี probability สูงสุด (None ถ้าไม่พบใบหน้า)
+      - confidence: ความน่าจะเป็นสูงสุด (None ถ้าไม่พบใบหน้า)
+      - scores: list ของ {label, score} (ว่างถ้าไม่พบใบหน้า)
       - inference_time_ms
       - total_time_ms
+      - message: ข้อความเพิ่มเติม
     """
     start_total = time.perf_counter()
 
+    # 1) ตรวจจับใบหน้าก่อน — ถ้าไม่พบ ไม่ต้องรัน inference
+    face_present = _detect_face(image_bytes)
+    if not face_present:
+        total_time_ms = (time.perf_counter() - start_total) * 1000.0
+        return {
+            "face_detected": False,
+            "predicted_label": None,
+            "confidence": None,
+            "scores": [],
+            "inference_time_ms": 0.0,
+            "total_time_ms": round(total_time_ms, 3),
+            "message": "Not Emotional Try Again",
+        }
+
+    # 2) มีใบหน้า → รัน inference ตามปกติ
     session = _get_session()
 
     # Preprocess
@@ -126,19 +196,24 @@ def predict_from_bytes(image_bytes: bytes) -> dict:
     total_time_ms = (time.perf_counter() - start_total) * 1000.0
 
     return {
+        "face_detected": True,
         "predicted_label": EMOTION_LABELS[top_idx],
         "confidence": float(probs[top_idx]),
         "scores": scores,
         "inference_time_ms": round(inference_time_ms, 3),
         "total_time_ms": round(total_time_ms, 3),
+        "message": None,
     }
 
 
 def warmup() -> None:
     """
     เรียกครั้งเดียวตอน worker process boot เพื่อ load โมเดลเข้า memory
-    ทำให้ request แรกไม่ช้า
+    ทำให้ request แรกไม่ช้า (โหลดทั้ง ONNX session และ Haar cascade)
     """
+    # Warmup face cascade
+    _get_face_cascade()
+    # Warmup ONNX session
     session = _get_session()
     dummy = np.zeros((1, 3, IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32)
     session.run(None, {_input_name: dummy})

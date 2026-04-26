@@ -8,6 +8,7 @@
     :root {
         --bg: #0f172a;
         --card: #1e293b;
+        --card-2: #1a2235;
         --border: #334155;
         --primary: #6366f1;
         --primary-hover: #4f46e5;
@@ -24,11 +25,11 @@
         min-height: 100vh;
         padding: 24px;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
     }
     .container {
-        max-width: 720px;
+        max-width: 860px;
         width: 100%;
     }
     header { text-align: center; margin-bottom: 32px; }
@@ -56,6 +57,7 @@
         text-align: center;
         cursor: pointer;
         transition: all 0.2s ease;
+        display: block;
     }
     .dropzone:hover, .dropzone.dragover {
         border-color: var(--primary);
@@ -65,22 +67,53 @@
     .dropzone-text { color: var(--text-muted); font-size: 14px; }
     .dropzone-text strong { color: var(--text); }
     #fileInput { display: none; }
-    .preview {
+
+    /* Selected files thumbnails */
+    .thumbs {
         display: none;
         margin-top: 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .thumbs.show { display: flex; }
+    .thumb {
+        position: relative;
+        width: 92px;
+        height: 92px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        background: #0b1224;
+    }
+    .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .thumb .remove {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.65);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 22px;
+        padding: 0;
         text-align: center;
     }
-    .preview img {
-        max-width: 100%;
-        max-height: 320px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-    }
-    .preview .filename {
+    .thumb .remove:hover { background: var(--error); }
+    .files-meta {
         margin-top: 8px;
         font-size: 12px;
         color: var(--text-muted);
     }
+
     .button-row { display: flex; gap: 8px; margin-top: 16px; }
     button {
         flex: 1;
@@ -105,43 +138,108 @@
         border: 1px solid var(--border);
     }
     .btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
-    .result { display: none; }
-    .result.show { display: block; }
+
+    /* ===== Per-image result cards ===== */
+    #resultsHeader {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        margin: 24px 4px 12px;
+    }
+    #resultsHeader.show { display: flex; }
+    #resultsHeader h2 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: 0.3px;
+    }
+    #resultsHeader .summary {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .results-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    @media (min-width: 720px) {
+        .results-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .result-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .result-img-wrap {
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        background: #0b1224;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-bottom: 1px solid var(--border);
+    }
+    .result-img-wrap img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    .result-body { padding: 16px 18px 18px; }
+    .result-filename {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+        word-break: break-all;
+    }
+
+    /* Top label block */
     .top-result {
         text-align: center;
-        padding: 16px;
+        padding: 14px 12px;
         background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(192,132,252,0.15) 100%);
         border-radius: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
-    .top-emoji { font-size: 56px; margin-bottom: 8px; }
+    .top-result.no-face {
+        background: linear-gradient(135deg, rgba(239,68,68,0.18) 0%, rgba(239,68,68,0.08) 100%);
+    }
+    .top-emoji { font-size: 48px; margin-bottom: 6px; line-height: 1; }
     .top-label {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 700;
         text-transform: capitalize;
     }
     .top-confidence {
         color: var(--text-muted);
         margin-top: 4px;
-        font-size: 14px;
-    }
-    .scores h3 {
         font-size: 13px;
+    }
+    .top-result.no-face .top-label { color: var(--error); text-transform: none; }
+
+    .scores h3 {
+        font-size: 11px;
         color: var(--text-muted);
-        margin-bottom: 12px;
+        margin-bottom: 10px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
     .score-row {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 8px;
+        gap: 10px;
+        margin-bottom: 6px;
     }
-    .score-emoji { font-size: 20px; width: 28px; }
+    .score-emoji { font-size: 18px; width: 24px; text-align: center; }
     .score-label {
-        width: 80px;
-        font-size: 13px;
+        width: 70px;
+        font-size: 12px;
         text-transform: capitalize;
     }
     .score-bar {
@@ -160,19 +258,40 @@
     .score-value {
         font-size: 12px;
         color: var(--text-muted);
-        width: 50px;
+        width: 48px;
         text-align: right;
         font-variant-numeric: tabular-nums;
     }
     .meta {
-        margin-top: 16px;
-        padding-top: 16px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--text-muted);
     }
+
+    /* Loading / status states */
+    .status-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 24px;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+    .status-row .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255,255,255,0.18);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    .status-row.error { color: var(--error); }
+
     .error-msg {
         display: none;
         background: rgba(239, 68, 68, 0.1);
@@ -209,22 +328,22 @@
 <div class="container">
     <header>
         <h1>🎭 Face Emotion Classifier</h1>
-        <p>อัปโหลดรูปใบหน้าเพื่อให้โมเดล ViT ทำนายอารมณ์</p>
+        <p>อัปโหลดรูปใบหน้าได้หลายรูปพร้อมกัน เพื่อให้โมเดล ViT ทำนายอารมณ์</p>
     </header>
 
     <div class="card">
         <label for="fileInput" class="dropzone" id="dropzone">
             <div class="dropzone-icon">📤</div>
             <div class="dropzone-text">
-                <strong>คลิกเพื่อเลือกรูป</strong> หรือลากและวางที่นี่<br>
-                รองรับ JPG, PNG, WebP (ไม่เกิน 5 MB)
+                <strong>คลิกเพื่อเลือกรูป (เลือกได้หลายรูป)</strong> หรือลากและวางที่นี่<br>
+                รองรับ JPG, PNG, WebP (ไม่เกิน 5 MB ต่อรูป)
             </div>
         </label>
-        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp">
-        <div class="preview" id="preview">
-            <img id="previewImg" alt="Preview">
-            <div class="filename" id="filename"></div>
-        </div>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" multiple>
+
+        <div class="thumbs" id="thumbs"></div>
+        <div class="files-meta" id="filesMeta"></div>
+
         <div class="button-row" id="buttonRow" style="display:none;">
             <button class="btn-secondary" id="resetBtn">รีเซ็ต</button>
             <button class="btn-primary" id="predictBtn">วิเคราะห์อารมณ์</button>
@@ -232,24 +351,15 @@
         <div class="error-msg" id="errorMsg"></div>
     </div>
 
-    <div class="card result" id="result">
-        <div class="top-result">
-            <div class="top-emoji" id="topEmoji">😊</div>
-            <div class="top-label" id="topLabel">happy</div>
-            <div class="top-confidence" id="topConfidence">95.2%</div>
-        </div>
-        <div class="scores">
-            <h3>คะแนนทั้งหมด</h3>
-            <div id="scoresList"></div>
-        </div>
-        <div class="meta">
-            <span id="metaTotal">Total: -- ms</span>
-            <span id="metaInf">Inference: -- ms</span>
-        </div>
+    <div id="resultsHeader">
+        <h2>ผลลัพธ์</h2>
+        <span class="summary" id="resultsSummary"></span>
     </div>
+    <div class="results-grid" id="resultsGrid"></div>
 
     <footer>
-        Powered by ONNX-quantized ViT (<a href="https://huggingface.co/trpakov/vit-face-expression" target="_blank">trpakov/vit-face-expression</a>)<br>
+        Powered by ONNX-quantized ViT (<a href="https://huggingface.co/trpakov/vit-face-expression" target="_blank">trpakov/vit-face-expression</a>)
+        + OpenCV face detection<br>
         ดู API docs ที่ <a href="/docs">/docs</a>
     </footer>
 </div>
@@ -259,21 +369,26 @@ const EMOJI_MAP = {
     angry: '😠', disgust: '🤢', fear: '😨',
     happy: '😊', neutral: '😐', sad: '😢', surprise: '😲'
 };
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-const fileInput = document.getElementById('fileInput');
-const dropzone = document.getElementById('dropzone');
-const preview = document.getElementById('preview');
-const previewImg = document.getElementById('previewImg');
-const filenameEl = document.getElementById('filename');
-const buttonRow = document.getElementById('buttonRow');
-const predictBtn = document.getElementById('predictBtn');
-const resetBtn = document.getElementById('resetBtn');
-const errorMsg = document.getElementById('errorMsg');
-const result = document.getElementById('result');
+const fileInput   = document.getElementById('fileInput');
+const dropzone    = document.getElementById('dropzone');
+const thumbsEl    = document.getElementById('thumbs');
+const filesMeta   = document.getElementById('filesMeta');
+const buttonRow   = document.getElementById('buttonRow');
+const predictBtn  = document.getElementById('predictBtn');
+const resetBtn    = document.getElementById('resetBtn');
+const errorMsg    = document.getElementById('errorMsg');
+const resultsHdr  = document.getElementById('resultsHeader');
+const resultsSum  = document.getElementById('resultsSummary');
+const resultsGrid = document.getElementById('resultsGrid');
 
-let currentFile = null;
+// internal state
+let selectedFiles = [];           // File[]
+let dataUrlCache = new WeakMap(); // File -> dataURL string
 
-// Drag & drop
+// ===== Drag & drop =====
 ['dragenter', 'dragover'].forEach(evt =>
     dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('dragover'); })
 );
@@ -281,87 +396,289 @@ let currentFile = null;
     dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('dragover'); })
 );
 dropzone.addEventListener('drop', e => {
-    if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        handleFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+        addFiles(Array.from(e.dataTransfer.files));
     }
 });
 fileInput.addEventListener('change', e => {
-    if (e.target.files.length) handleFile(e.target.files[0]);
-});
-
-function handleFile(file) {
-    hideError();
-    result.classList.remove('show');
-    currentFile = file;
-    const reader = new FileReader();
-    reader.onload = e => {
-        previewImg.src = e.target.result;
-        preview.style.display = 'block';
-        filenameEl.textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
-        buttonRow.style.display = 'flex';
-    };
-    reader.readAsDataURL(file);
-}
-
-resetBtn.addEventListener('click', () => {
-    currentFile = null;
-    fileInput.value = '';
-    preview.style.display = 'none';
-    buttonRow.style.display = 'none';
-    result.classList.remove('show');
-    hideError();
-});
-
-predictBtn.addEventListener('click', async () => {
-    if (!currentFile) return;
-    hideError();
-    predictBtn.disabled = true;
-    predictBtn.innerHTML = '<span class="spinner"></span>กำลังวิเคราะห์...';
-
-    const formData = new FormData();
-    formData.append('file', currentFile);
-
-    try {
-        const res = await fetch('/predict', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!res.ok) {
-            showError(data.detail || data.error || 'เกิดข้อผิดพลาด');
-            return;
-        }
-        renderResult(data);
-    } catch (err) {
-        showError('Network error: ' + err.message);
-    } finally {
-        predictBtn.disabled = false;
-        predictBtn.textContent = 'วิเคราะห์อารมณ์';
+    if (e.target.files && e.target.files.length) {
+        addFiles(Array.from(e.target.files));
     }
 });
 
-function renderResult(data) {
-    document.getElementById('topEmoji').textContent = EMOJI_MAP[data.predicted_label] || '🎭';
-    document.getElementById('topLabel').textContent = data.predicted_label;
-    document.getElementById('topConfidence').textContent =
-        (data.confidence * 100).toFixed(1) + '% confidence';
+// ===== File management =====
+function addFiles(newFiles) {
+    hideError();
+    const valid = [];
+    const issues = [];
+    newFiles.forEach(f => {
+        if (!ALLOWED_MIME.includes(f.type)) {
+            issues.push(`${f.name}: ชนิดไฟล์ไม่รองรับ`);
+            return;
+        }
+        if (f.size > MAX_FILE_BYTES) {
+            issues.push(`${f.name}: ขนาดเกิน 5 MB`);
+            return;
+        }
+        // de-dup โดยใช้ name+size+lastModified
+        const key = `${f.name}|${f.size}|${f.lastModified}`;
+        const exists = selectedFiles.some(s => `${s.name}|${s.size}|${s.lastModified}` === key);
+        if (!exists) valid.push(f);
+    });
+    if (issues.length) showError(issues.join(' · '));
+    selectedFiles = selectedFiles.concat(valid);
+    // เคลียร์ value ของ input เพื่อให้เลือกไฟล์เดิมซ้ำได้
+    fileInput.value = '';
+    renderThumbs();
+}
 
-    const list = document.getElementById('scoresList');
-    list.innerHTML = '';
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderThumbs();
+}
+
+function renderThumbs() {
+    thumbsEl.innerHTML = '';
+    if (selectedFiles.length === 0) {
+        thumbsEl.classList.remove('show');
+        filesMeta.textContent = '';
+        buttonRow.style.display = 'none';
+        return;
+    }
+    thumbsEl.classList.add('show');
+    selectedFiles.forEach((f, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb';
+        const img = document.createElement('img');
+        // ใช้ cache เพื่อไม่ต้อง re-read FileReader
+        if (dataUrlCache.has(f)) {
+            img.src = dataUrlCache.get(f);
+        } else {
+            const reader = new FileReader();
+            reader.onload = e => {
+                dataUrlCache.set(f, e.target.result);
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(f);
+        }
+        const btn = document.createElement('button');
+        btn.className = 'remove';
+        btn.type = 'button';
+        btn.title = 'ลบรูปนี้';
+        btn.textContent = '×';
+        btn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            removeFile(idx);
+        });
+        wrap.appendChild(img);
+        wrap.appendChild(btn);
+        thumbsEl.appendChild(wrap);
+    });
+    const totalKB = selectedFiles.reduce((a, f) => a + f.size, 0) / 1024;
+    filesMeta.textContent = `เลือกไว้ ${selectedFiles.length} รูป · รวม ${totalKB.toFixed(1)} KB`;
+    buttonRow.style.display = 'flex';
+}
+
+// ===== Reset =====
+resetBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    fileInput.value = '';
+    renderThumbs();
+    resultsGrid.innerHTML = '';
+    resultsHdr.classList.remove('show');
+    resultsSum.textContent = '';
+    hideError();
+});
+
+// ===== Predict =====
+predictBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+    hideError();
+    predictBtn.disabled = true;
+    resetBtn.disabled = true;
+    predictBtn.innerHTML = '<span class="spinner"></span>กำลังวิเคราะห์...';
+
+    // เคลียร์ผลลัพธ์เก่า + แสดง placeholder card สำหรับแต่ละไฟล์
+    resultsGrid.innerHTML = '';
+    resultsHdr.classList.add('show');
+    resultsSum.textContent = `กำลังประมวลผล ${selectedFiles.length} รูป...`;
+
+    const cardEls = selectedFiles.map(f => createPlaceholderCard(f));
+    cardEls.forEach(el => resultsGrid.appendChild(el));
+
+    // ยิงคำขอแบบขนาน
+    const results = await Promise.all(
+        selectedFiles.map((f, i) => predictOne(f).then(
+            data  => ({ ok: true,  index: i, data, file: f }),
+            error => ({ ok: false, index: i, error: error.message || String(error), file: f })
+        ))
+    );
+
+    // เติมผลลัพธ์ลงในแต่ละการ์ด
+    let faceCount = 0, noFaceCount = 0, errCount = 0;
+    results.forEach(r => {
+        const cardEl = cardEls[r.index];
+        if (!r.ok) {
+            errCount++;
+            renderErrorIntoCard(cardEl, r.error);
+        } else if (r.data.face_detected === false) {
+            noFaceCount++;
+            renderNoFaceIntoCard(cardEl, r.data);
+        } else {
+            faceCount++;
+            renderResultIntoCard(cardEl, r.data);
+        }
+    });
+
+    const summaryParts = [];
+    if (faceCount)   summaryParts.push(`พบใบหน้า ${faceCount}`);
+    if (noFaceCount) summaryParts.push(`ไม่พบใบหน้า ${noFaceCount}`);
+    if (errCount)    summaryParts.push(`ผิดพลาด ${errCount}`);
+    resultsSum.textContent = summaryParts.join(' · ');
+
+    predictBtn.disabled = false;
+    resetBtn.disabled = false;
+    predictBtn.textContent = 'วิเคราะห์อารมณ์';
+});
+
+async function predictOne(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/predict', { method: 'POST', body: formData });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* ignore */ }
+    if (!res.ok) {
+        const msg = (data && (data.detail || data.error)) || `HTTP ${res.status}`;
+        throw new Error(msg);
+    }
+    return data;
+}
+
+// ===== Card rendering =====
+function createPlaceholderCard(file) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'result-img-wrap';
+    const img = document.createElement('img');
+    if (dataUrlCache.has(file)) {
+        img.src = dataUrlCache.get(file);
+    } else {
+        const reader = new FileReader();
+        reader.onload = e => {
+            dataUrlCache.set(file, e.target.result);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    imgWrap.appendChild(img);
+
+    const body = document.createElement('div');
+    body.className = 'result-body';
+    body.innerHTML = `
+        <div class="result-filename">${escapeHtml(file.name)} (${(file.size/1024).toFixed(1)} KB)</div>
+        <div class="status-row" data-role="status">
+            <div class="spinner"></div>
+            <span>กำลังวิเคราะห์...</span>
+        </div>
+    `;
+
+    card.appendChild(imgWrap);
+    card.appendChild(body);
+    return card;
+}
+
+function renderResultIntoCard(card, data) {
+    const body = card.querySelector('.result-body');
+    const status = body.querySelector('[data-role="status"]');
+    if (status) status.remove();
+
+    const top = document.createElement('div');
+    top.className = 'top-result';
+    top.innerHTML = `
+        <div class="top-emoji">${EMOJI_MAP[data.predicted_label] || '🎭'}</div>
+        <div class="top-label">${escapeHtml(data.predicted_label)}</div>
+        <div class="top-confidence">${(data.confidence * 100).toFixed(1)}% confidence</div>
+    `;
+    body.appendChild(top);
+
+    const scoresWrap = document.createElement('div');
+    scoresWrap.className = 'scores';
+    scoresWrap.innerHTML = `<h3>คะแนนทั้งหมด</h3>`;
+    const list = document.createElement('div');
     data.scores.forEach(s => {
         const row = document.createElement('div');
         row.className = 'score-row';
         row.innerHTML = `
             <div class="score-emoji">${EMOJI_MAP[s.label] || '•'}</div>
-            <div class="score-label">${s.label}</div>
-            <div class="score-bar"><div class="score-bar-fill" style="width:${s.score*100}%"></div></div>
+            <div class="score-label">${escapeHtml(s.label)}</div>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${(s.score*100).toFixed(2)}%"></div></div>
             <div class="score-value">${(s.score*100).toFixed(1)}%</div>
         `;
         list.appendChild(row);
     });
+    scoresWrap.appendChild(list);
+    body.appendChild(scoresWrap);
 
-    document.getElementById('metaTotal').textContent = `Total: ${data.total_time_ms.toFixed(1)} ms`;
-    document.getElementById('metaInf').textContent = `Inference: ${data.inference_time_ms.toFixed(1)} ms`;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `
+        <span>Total: ${Number(data.total_time_ms).toFixed(1)} ms</span>
+        <span>Inference: ${Number(data.inference_time_ms).toFixed(1)} ms</span>
+    `;
+    body.appendChild(meta);
+}
 
-    result.classList.add('show');
+function renderNoFaceIntoCard(card, data) {
+    const body = card.querySelector('.result-body');
+    const status = body.querySelector('[data-role="status"]');
+    if (status) status.remove();
+
+    const top = document.createElement('div');
+    top.className = 'top-result no-face';
+    top.innerHTML = `
+        <div class="top-emoji">❌</div>
+        <div class="top-label">Not Emotional Try Again</div>
+        <div class="top-confidence">ไม่พบใบหน้าในภาพนี้ — กรุณาอัปโหลดภาพใบหน้าที่ชัดเจน</div>
+    `;
+    body.appendChild(top);
+
+    if (data && typeof data.total_time_ms === 'number') {
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `
+            <span>Total: ${Number(data.total_time_ms).toFixed(1)} ms</span>
+            <span>Inference: skipped</span>
+        `;
+        body.appendChild(meta);
+    }
+}
+
+function renderErrorIntoCard(card, message) {
+    const body = card.querySelector('.result-body');
+    const status = body.querySelector('[data-role="status"]');
+    if (status) status.remove();
+
+    const top = document.createElement('div');
+    top.className = 'top-result no-face';
+    top.innerHTML = `
+        <div class="top-emoji">⚠️</div>
+        <div class="top-label">เกิดข้อผิดพลาด</div>
+        <div class="top-confidence">${escapeHtml(message || 'Unknown error')}</div>
+    `;
+    body.appendChild(top);
+}
+
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }

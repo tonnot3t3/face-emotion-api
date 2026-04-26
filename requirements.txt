@@ -6,6 +6,9 @@ pydantic==2.10.4
 
 # ===== Inference runtime =====
 onnxruntime==1.20.1
-numpy==2.0.2
+numpy==2.1.0
 Pillow==11.0.0
 optimum[onnxruntime]
+
+# ===== Face detection (Haar cascade) =====
+opencv-python-headless==4.10.0.84
