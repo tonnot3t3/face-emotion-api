@@ -51,6 +51,16 @@ IMAGE_SIZE = 224
 NORMALIZE_MEAN = [0.5, 0.5, 0.5]
 NORMALIZE_STD = [0.5, 0.5, 0.5]
 
+# ===== Accuracy tweaks =====
+# Crop ใบหน้า + margin (สัดส่วน) ก่อนส่งเข้าโมเดล แทนการส่งทั้งภาพ
+# ค่า 0.25 = ขยาย bounding box ออก 25% ทุกด้าน (เก็บหน้าผาก/คาง/ขมับ)
+# ตั้งเป็น 0 เพื่อใช้ box แน่นหน้า, ตั้งเป็นค่าลบเพื่อ disable cropping (ใช้ทั้งภาพ)
+FACE_CROP_MARGIN = float(os.getenv("FACE_CROP_MARGIN", "0.25"))
+
+# Test-time augmentation: รัน inference เพิ่ม 1 ครั้งบนภาพ flip ซ้าย-ขวา แล้ว avg
+# ช่วยลด noise + bias ทางด้านใดด้านหนึ่งของใบหน้า ราคา ~2x inference time
+ENABLE_TTA = os.getenv("ENABLE_TTA", "1") not in {"0", "false", "False", ""}
+
 # ===== Misc =====
 APP_TITLE = "Face Emotion Classification API"
 APP_VERSION = "1.0.0"

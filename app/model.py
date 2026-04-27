@@ -4,6 +4,8 @@ Model inference module.
 ฟังก์ชันที่ใช้ใน worker process ของ ProcessPoolExecutor
 - โหลด ONNX session แบบ lazy (เพราะ process ใหม่ไม่มี state จาก parent)
 - ตรวจจับใบหน้า (Haar cascade) ก่อน inference
+- crop ใบหน้าก่อนส่งเข้าโมเดลเพื่อความแม่นยำ
+- TTA (horizontal flip) เพื่อลด noise
 - preprocess รูปภาพ
 - รัน inference
 - postprocess softmax + argmax
@@ -26,6 +28,8 @@ from PIL import Image
 from app.config import (
     ACTIVE_MODEL_PATH,
     EMOTION_LABELS,
+    ENABLE_TTA,
+    FACE_CROP_MARGIN,
     IMAGE_SIZE,
     NORMALIZE_MEAN,
     NORMALIZE_STD,
@@ -49,11 +53,8 @@ def _get_session(model_path: str | Path | None = None) -> ort.InferenceSession:
                 f"ไม่พบไฟล์โมเดลที่ {path}. "
                 "กรุณารัน scripts/convert_to_onnx.py และ scripts/quantize.py ก่อน"
             )
-        # ปรับ session option ให้เร็วที่สุดบน CPU
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        # intra_op = thread ภายใน operator, inter_op = thread ระหว่าง operator
-        # ตั้งเป็น 1 เพราะเราใช้ multi-process แล้ว ไม่ต้องการให้แต่ละ process แย่ง CPU กัน
         sess_options.intra_op_num_threads = 1
         sess_options.inter_op_num_threads = 1
         _session = ort.InferenceSession(
@@ -72,34 +73,32 @@ def _get_face_cascade() -> cv2.CascadeClassifier:
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         cascade = cv2.CascadeClassifier(cascade_path)
         if cascade.empty():
-            raise RuntimeError(
-                f"ไม่สามารถโหลด Haar cascade ที่ {cascade_path}"
-            )
+            raise RuntimeError(f"ไม่สามารถโหลด Haar cascade ที่ {cascade_path}")
         _face_cascade = cascade
     return _face_cascade
 
 
-def _detect_face(image_bytes: bytes) -> bool:
+def _detect_faces(image_bytes: bytes) -> Tuple[Image.Image, list]:
     """
-    ตรวจสอบว่าในภาพมีใบหน้าอย่างน้อย 1 ใบหรือไม่
-    ใช้ Haar cascade frontal face detector ของ OpenCV (เร็ว, ไม่ต้อง dl model เพิ่ม)
-
-    คืนค่า True ถ้าพบใบหน้าอย่างน้อย 1 ใบ, False ถ้าไม่พบ
+    ตรวจจับใบหน้าในภาพ คืน (PIL image RGB ขนาดเดิม, list ของ (x, y, w, h) ใน original coords)
+    ใช้ Haar cascade frontal face detector ของ OpenCV
+    ทำการ detect บนภาพที่ย่อแล้วถ้ามันใหญ่ — แล้ว scale box กลับเป็น coord เดิม
     """
-    img = Image.open(BytesIO(image_bytes))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
+    img_full = Image.open(BytesIO(image_bytes))
+    if img_full.mode != "RGB":
+        img_full = img_full.convert("RGB")
 
-    # ลด resolution ลงถ้าใหญ่เกินเพื่อความเร็ว (จำกัด long edge ที่ 800px)
     max_side = 800
-    w, h = img.size
+    w, h = img_full.size
+    scale = 1.0
     if max(w, h) > max_side:
         scale = max_side / float(max(w, h))
-        img = img.resize((int(w * scale), int(h * scale)), Image.BILINEAR)
+        img_small = img_full.resize((int(w * scale), int(h * scale)), Image.BILINEAR)
+    else:
+        img_small = img_full
 
-    arr = np.asarray(img)
+    arr = np.asarray(img_small)
     gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-    # equalize histogram ช่วยให้ตรวจจับในภาพที่แสงไม่สม่ำเสมอได้ดีขึ้น
     gray = cv2.equalizeHist(gray)
 
     cascade = _get_face_cascade()
@@ -110,30 +109,62 @@ def _detect_face(image_bytes: bytes) -> bool:
         minSize=(30, 30),
         flags=cv2.CASCADE_SCALE_IMAGE,
     )
+
+    if scale != 1.0 and len(faces) > 0:
+        inv = 1.0 / scale
+        faces = [
+            (int(x * inv), int(y * inv), int(w * inv), int(h * inv))
+            for (x, y, w, h) in faces
+        ]
+    else:
+        faces = [tuple(map(int, b)) for b in faces]
+
+    return img_full, faces
+
+
+def _detect_face(image_bytes: bytes) -> bool:
+    """Backward-compat: คืน True ถ้าพบใบหน้าอย่างน้อย 1 ใบ"""
+    _, faces = _detect_faces(image_bytes)
     return len(faces) > 0
 
 
-def _preprocess(image_bytes: bytes) -> np.ndarray:
+def _crop_face_with_margin(img: Image.Image, box: tuple, margin_ratio: float) -> Image.Image:
     """
-    แปลงรูปภาพ bytes -> tensor [1, 3, 224, 224] แบบ float32
+    Crop ใบหน้าจากภาพต้นฉบับพร้อม margin (เก็บหน้าผาก/คาง/ขมับ)
+    margin_ratio ต่ำกว่า 0 → คืนภาพเดิม (disable cropping)
+    """
+    if margin_ratio < 0:
+        return img
+    x, y, w, h = box
+    iw, ih = img.size
+    mx = int(round(w * margin_ratio))
+    my = int(round(h * margin_ratio))
+    x1 = max(0, x - mx)
+    y1 = max(0, y - my)
+    x2 = min(iw, x + w + mx)
+    y2 = min(ih, y + h + my)
+    if x2 <= x1 or y2 <= y1:
+        return img
+    return img.crop((x1, y1, x2, y2))
 
-    ใช้ algorithm เดียวกับ ViTImageProcessor แต่ implement เองเพื่อไม่ต้องใช้ transformers
-    """
-    img = Image.open(BytesIO(image_bytes))
-    # บางภาพอาจเป็น RGBA, L (grayscale) ฯลฯ — แปลงเป็น RGB ทั้งหมด
+
+def _preprocess_pil(img: Image.Image) -> np.ndarray:
+    """แปลง PIL Image -> tensor [1, 3, 224, 224] float32"""
     if img.mode != "RGB":
         img = img.convert("RGB")
-    # resize ให้เป็น 224x224 ด้วย bilinear (ตรงกับ default ของ ViTImageProcessor)
     img = img.resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
-    # normalize: pixel/255 -> (x - mean) / std
     arr = np.asarray(img, dtype=np.float32) / 255.0
     arr = (arr - np.array(NORMALIZE_MEAN, dtype=np.float32)) / np.array(
         NORMALIZE_STD, dtype=np.float32
     )
-    # HWC -> CHW -> NCHW
     arr = np.transpose(arr, (2, 0, 1))
     arr = np.expand_dims(arr, 0)
     return arr.astype(np.float32)
+
+
+def _preprocess(image_bytes: bytes) -> np.ndarray:
+    """แปลง bytes -> tensor (backward-compat สำหรับ test/benchmark)"""
+    return _preprocess_pil(Image.open(BytesIO(image_bytes)))
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -157,8 +188,8 @@ def predict_from_bytes(image_bytes: bytes) -> dict:
     start_total = time.perf_counter()
 
     # 1) ตรวจจับใบหน้าก่อน — ถ้าไม่พบ ไม่ต้องรัน inference
-    face_present = _detect_face(image_bytes)
-    if not face_present:
+    img_full, faces = _detect_faces(image_bytes)
+    if not faces:
         total_time_ms = (time.perf_counter() - start_total) * 1000.0
         return {
             "face_detected": False,
@@ -170,27 +201,35 @@ def predict_from_bytes(image_bytes: bytes) -> dict:
             "message": "Not Emotional Try Again",
         }
 
-    # 2) มีใบหน้า → รัน inference ตามปกติ
+    # 2) เลือกใบหน้าใหญ่ที่สุด แล้ว crop พร้อม margin
+    #    การ crop ช่วยให้โมเดลเห็นเฉพาะใบหน้า (ไม่มีพื้นหลัง/เสื้อ) → แม่นขึ้นมาก
+    faces.sort(key=lambda b: b[2] * b[3], reverse=True)
+    face_img = _crop_face_with_margin(img_full, faces[0], FACE_CROP_MARGIN)
+
+    # 3) Preprocess + inference (TTA: original + horizontal flip → average probs)
     session = _get_session()
+    tensor_orig = _preprocess_pil(face_img)
 
-    # Preprocess
-    tensor = _preprocess(image_bytes)
-
-    # Inference
     start_inf = time.perf_counter()
-    outputs = session.run(None, {_input_name: tensor})
-    inference_time_ms = (time.perf_counter() - start_inf) * 1000.0
+    outputs_orig = session.run(None, {_input_name: tensor_orig})
+    probs_orig = _softmax(outputs_orig[0][0])
 
-    # Postprocess
-    logits = outputs[0][0]  # shape: (num_classes,)
-    probs = _softmax(logits)
+    if ENABLE_TTA:
+        face_flipped = face_img.transpose(Image.FLIP_LEFT_RIGHT)
+        tensor_flip = _preprocess_pil(face_flipped)
+        outputs_flip = session.run(None, {_input_name: tensor_flip})
+        probs_flip = _softmax(outputs_flip[0][0])
+        probs = (probs_orig + probs_flip) / 2.0
+    else:
+        probs = probs_orig
+
+    inference_time_ms = (time.perf_counter() - start_inf) * 1000.0
     top_idx = int(np.argmax(probs))
 
     scores = [
         {"label": EMOTION_LABELS[i], "score": float(probs[i])}
         for i in range(len(EMOTION_LABELS))
     ]
-    # เรียงจาก score มากไปน้อยให้ใช้งานง่าย
     scores.sort(key=lambda x: x["score"], reverse=True)
 
     total_time_ms = (time.perf_counter() - start_total) * 1000.0
@@ -211,9 +250,7 @@ def warmup() -> None:
     เรียกครั้งเดียวตอน worker process boot เพื่อ load โมเดลเข้า memory
     ทำให้ request แรกไม่ช้า (โหลดทั้ง ONNX session และ Haar cascade)
     """
-    # Warmup face cascade
     _get_face_cascade()
-    # Warmup ONNX session
     session = _get_session()
     dummy = np.zeros((1, 3, IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32)
     session.run(None, {_input_name: dummy})
